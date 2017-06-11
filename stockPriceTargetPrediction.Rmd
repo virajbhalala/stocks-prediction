@@ -1,0 +1,64 @@
+---
+title: "Price Target Prediction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(rvest)
+library(stringr)
+library(tidyr)
+library(dummies)
+```
+
+
+```{r 5}
+Nasdaq100_Symbols <- c("AAPL", "ADBE", "ADI", "ADP", "ADSK", "AKAM", "ALTR", "ALXN",
+"AMAT", "AMGN", "AMZN", "ATVI", "AVGO", "BBBY", "BIDU", "BIIB",
+"BRCM", "CA", "CELG", "CERN", "CHKP", "CHRW", "CHTR", "CMCSA",
+"COST", "CSCO", "CTRX", "CTSH", "CTXS", "DISCA", "DISCK", "DISH",
+"DLTR", "DTV", "EBAY", "EQIX", "ESRX", "EXPD", "EXPE", "FAST",
+"FB", "FFIV", "FISV", "FOXA", "GILD", "GMCR", "GOOG", "GOOGL",
+"GRMN", "HSIC", "ILMN", "INTC", "INTU", "ISRG", "KLAC", "KRFT",
+"LBTYA", "LLTC", "LMCA", "LMCK", "LVNTA", "MAR", "MAT", "MDLZ",
+"MNST", "MSFT", "MU", "MXIM", "MYL", "NFLX", "NTAP", "NVDA",
+"NXPI", "ORLY", "PAYX", "PCAR", "PCLN", "QCOM", "QVCA", "REGN",
+"ROST", "SBAC", "SBUX", "SIAL", "SIRI", "SNDK", "SPLS", "SRCL",
+"STX", "SYMC", "TRIP", "TSCO", "TSLA", "TXN", "VIAB", "VIP",
+"VOD", "VRSK", "VRTX", "WDC", "WFM", "WYNN", "XLNX", "YHOO")
+
+url <- paste0('https://www.marketbeat.com/stocks/NASDAQ/', 'AMD')
+webpage<-read_html(url)
+targets_table <-html_nodes(webpage,'table')
+targetsOrignial <-html_table(targets_table)[[3]]
+
+priceTargets <-targetsOrignial
+priceTargets <-cbind(priceTargets, dummy(priceTargets$Firm))
+priceTargets <-cbind(priceTargets, dummy(priceTargets$Action))
+priceTargets <-cbind(priceTargets, dummy(priceTargets$Rating))
+
+
+```
+
+
+
+```{r clean}
+for (col in names(priceTargets)){
+  if(any((grep("priceTargets", col) == 1))){
+    colnames(priceTargets)[which(names(priceTargets) == col)]<- gsub("priceTargets","",col)
+  }
+}
+
+priceTargets
+```
+```{r 7}
+```
+```{r 8}
+```
+```{r 9}
+```
+```{r 10}
+```
+```{r 11}
+```
+```{r 12}
+```
