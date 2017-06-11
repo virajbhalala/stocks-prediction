@@ -8,38 +8,101 @@ library(rvest)
 library(stringr)
 library(tidyr)
 library(dummies)
+library(quantmod)
 ```
 
 
 ```{r 5}
-Nasdaq100_Symbols <- c("AAPL", "ADBE", "ADI", "ADP", "ADSK", "AKAM", "ALTR", "ALXN",
-"AMAT", "AMGN", "AMZN", "ATVI", "AVGO", "BBBY", "BIDU", "BIIB",
-"BRCM", "CA", "CELG", "CERN", "CHKP", "CHRW", "CHTR", "CMCSA",
-"COST", "CSCO", "CTRX", "CTSH", "CTXS", "DISCA", "DISCK", "DISH",
-"DLTR", "DTV", "EBAY", "EQIX", "ESRX", "EXPD", "EXPE", "FAST",
-"FB", "FFIV", "FISV", "FOXA", "GILD", "GMCR", "GOOG", "GOOGL",
-"GRMN", "HSIC", "ILMN", "INTC", "INTU", "ISRG", "KLAC", "KRFT",
-"LBTYA", "LLTC", "LMCA", "LMCK", "LVNTA", "MAR", "MAT", "MDLZ",
-"MNST", "MSFT", "MU", "MXIM", "MYL", "NFLX", "NTAP", "NVDA",
-"NXPI", "ORLY", "PAYX", "PCAR", "PCLN", "QCOM", "QVCA", "REGN",
-"ROST", "SBAC", "SBUX", "SIAL", "SIRI", "SNDK", "SPLS", "SRCL",
-"STX", "SYMC", "TRIP", "TSCO", "TSLA", "TXN", "VIAB", "VIP",
-"VOD", "VRSK", "VRTX", "WDC", "WFM", "WYNN", "XLNX", "YHOO")
+getStockAnalystPriceTarget <- function (ticker){
+  url <- paste0('https://www.marketbeat.com/stocks/NASDAQ/', ticker, '?MostRecent=0')
+  webpage<-read_html(url)
+  targets_table <- html_nodes(webpage,'table')
+  targetsOrignial <- html_table(targets_table)[[3]]
+  
+  getClosingPrice <- getSymbols(ticker,auto.assign = FALSE)
+  
+  priceTargets <- targetsOrignial
+  
+  #filter df so we only have dates before 1yr ( "2016-06-09")
+  priceTargets$Date <-as.POSIXlt(priceTargets$Date,format = "%m/%d/%Y")
+  priceTargets <- subset(priceTargets, Date < as.POSIXlt("2016-06-09"))
+  
+  if(nrow(priceTargets)>0){
+    #filter the df by removing rows that have blank price targets
+    priceTargets <- subset(priceTargets, priceTargets$"Price Target" != "")
+    
+    #drop unnecessary columns in df
+    drops <- c("Impact on Share Price","Details")
+    priceTargets <- priceTargets[ , !(names(priceTargets) %in% drops)]
+    
+    #clean price target values in df (this also removes arrows)
+    priceTargets$"Price Target" <- sub(".*[^.]+-> ","", priceTargets$"Price Target")
+    priceTargets$"Price Target" <- gsub(",", "", priceTargets$"Price Target")
+    priceTargets$"Price Target" <- as.numeric(sub("\\$","",priceTargets$"Price Target"))
+    
+    #Remove the previous rating in Rating column this is before ->.  (For ex.  Hold -> Buy will become Buy). We are only considering current ratings.
+    priceTargets$"Rating" <- sub("...[^.]+->.","", priceTargets$"Rating")
+    
+    
+    priceTargets$"Price After One Year"<- -1
+    priceTargets$"Price Difference"<- -1
+    priceTargets$"Ticker" <- ticker
+    for(i in 1:nrow(priceTargets)){
+      targetSetDate <- priceTargets[i,1]
+      targetEndDate <- targetSetDate
+      targetEndDate$year <- targetSetDate$year+1
+      priceAfterYear <- as.numeric(getClosingPrice[as.character(targetEndDate)][,4])
+      #Quantmod returns null for some of the dates especially when the day is saturday, sunday, or holiday
+      while(any(priceAfterYear) == FALSE){
+        targetEndDate$mday <-targetEndDate$mday+1
+        priceAfterYear <- as.numeric(getClosingPrice[as.character(targetEndDate)][,4])
+      }
+      if((priceAfterYear - priceTargets[i,5]) > 0){
+        priceTargets[i,7] <- 1
+      }
+      else{
+        priceTargets[i,7] <- 0
+      }
+      priceTargets[i,6] <-priceAfterYear
+    }
+    return(priceTargets)
+  }
+  else{
+    return(NULL)
+  }
+}
 
-url <- paste0('https://www.marketbeat.com/stocks/NASDAQ/', 'AMD')
-webpage<-read_html(url)
-targets_table <-html_nodes(webpage,'table')
-targetsOrignial <-html_table(targets_table)[[3]]
 
-priceTargets <-targetsOrignial
+```
+
+
+
+```{r 8 warning=FALSE echo=FALSE}
+Nasdaq100Tickers <- c("ATVI","ADBE","AKAM","ALXN","GOOG","GOOGL","AMZN","AAL","AMGN","ADI","AAPL","AMAT","ADSK","ADP","BIDU","BIIB","BMRN","AVGO","CA","CELG","CERN","CHTR","CHKP","CTAS","CSCO","CTXS","CTSH","CMCSA","COST","CSX","CTRP","XRAY","DISCA","DISCK","DISH","DLTR","EBAY","EA","EXPE","ESRX","FB","FAST","FISV","GILD","HAS","HSIC","HOLX","IDXX","ILMN","INCY","INTC","INTU","ISRG","JBHT","JD","KLAC","LRCX","LBTYA","LBTYK","LILA","LILAK","LVNTA","QVCA","MAR","MAT","MXIM","MCHP","MU","MSFT","MDLZ","MNST","MYL","NTES","NFLX","NCLH","NVDA","ORLY","PCAR","PAYX","PYPL","QCOM","REGN","ROST","STX","SHPG","SIRI","SWKS","SBUX","SYMC","TMUS","TSLA","TXN","KHC","PCLN","TSCO","FOX","FOXA","ULTA","VRSK","VRTX","VIAB","VOD","WBA","WDC","WYNN","XLNX","YHOO")
+finaldf<-data.frame()
+for (eachTicker in Nasdaq100Tickers){
+  print(eachTicker)
+  df <- getStockAnalystPriceTarget(eachTicker)
+  finaldf <- rbind(finaldf,a)
+}
+
+print(finaldf$Rating[!duplicated(finaldf$Rating)])
+
+
+
+
+```
+
+
+```{r 7}
+
+
 priceTargets <-cbind(priceTargets, dummy(priceTargets$Firm))
 priceTargets <-cbind(priceTargets, dummy(priceTargets$Action))
 priceTargets <-cbind(priceTargets, dummy(priceTargets$Rating))
 
 
 ```
-
-
 
 ```{r clean}
 for (col in names(priceTargets)){
@@ -51,8 +114,78 @@ for (col in names(priceTargets)){
 priceTargets
 ```
 ```{r 7}
+
+
+priceTargets$Date <-as.POSIXlt(priceTargets$Date,format = "%m/%d/%Y")
+priceTargetsLastYear <- subset(priceTargets, Date < as.POSIXlt("2016-06-09"))
+for(i in priceTargets$Date){
+  targetSetDate <-as.POSIXlt(i,format = "%m/%d/%Y")
+  targetEndDate <-targetSetDate$year+1
+  AMD[targetSetDate]
+}
+
+
 ```
+
 ```{r 8}
+  ticker <- "GOOGL"
+  url <- paste0('https://www.marketbeat.com/stocks/NASDAQ/', ticker, '?MostRecent=0')
+  webpage<-read_html(url)
+  targets_table <- html_nodes(webpage,'table')
+  targetsOrignial <- html_table(targets_table)[[3]]
+  
+  getClosingPrice <- getSymbols(ticker,auto.assign = FALSE)
+  
+  priceTargets <- targetsOrignial
+  
+  #filter df so we only have dates before 1yr ( "2016-06-09")
+  priceTargets$Date <-as.POSIXlt(priceTargets$Date,format = "%m/%d/%Y")
+  priceTargets <- subset(priceTargets, Date < as.POSIXlt("2016-06-09"))
+  
+  if(nrow(priceTargets)>0){
+    #filter the df by removing rows that have blank price targets
+    priceTargets <- subset(priceTargets, priceTargets$"Price Target" != "")
+    
+    #drop unnecessary columns in df
+    drops <- c("Impact on Share Price","Details")
+    priceTargets <- priceTargets[ , !(names(priceTargets) %in% drops)]
+    
+    #clean price target values in df (this also removes arrows)
+    priceTargets$"Price Target" <- sub(".*[^.]+-> ","", priceTargets$"Price Target")
+    priceTargets$"Price Target" <- gsub(",", "", priceTargets$"Price Target")
+    priceTargets$"Price Target" <- as.numeric(sub("\\$","",priceTargets$"Price Target"))
+    
+    #Remove the previous rating in Rating column this is before ->.  (For ex.  Hold -> Buy will become Buy). We are only considering current ratings.
+    priceTargets$"Rating" <- sub("...[^.]+->.","", priceTargets$"Rating")
+    
+    
+    priceTargets$"Price After One Year"<- -1
+    priceTargets$"Price Difference"<- -1
+    priceTargets$"Ticker" <- ticker
+    for(i in 1:nrow(priceTargets)){
+      targetSetDate <- priceTargets[i,1]
+      targetEndDate <- targetSetDate
+      targetEndDate$year <- targetSetDate$year+1
+      priceAfterYear <- as.numeric(getClosingPrice[as.character(targetEndDate)][,4])
+      #Quantmod returns null for some of the dates especially when the day is saturday, sunday, or holiday
+      while(any(priceAfterYear) == FALSE){
+        targetEndDate$mday <-targetEndDate$mday+1
+        priceAfterYear <- as.numeric(getClosingPrice[as.character(targetEndDate)][,4])
+      }
+      if((priceAfterYear - priceTargets[i,5]) > 0){
+        priceTargets[i,7] <- 1
+      }
+      else{
+        priceTargets[i,7] <- 0
+      }
+      priceTargets[i,6] <-priceAfterYear
+    }
+    return(priceTargets)
+  }
+  else{
+    return(NULL)
+  }
+
 ```
 ```{r 9}
 ```
