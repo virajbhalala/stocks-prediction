@@ -25,11 +25,13 @@ finaldf <- finaldf[ , !(names(finaldf) %in% drops)]
 
 ```{r initial}
 #apply factors to columns that have 0 and 1 and as.numeric to columns that are numbers
-factor_cols <- -which(names(finaldf) %in% c('Price Target','Price After One Year'))
-finaldf[factor_cols] <- lapply(finaldf[factor_cols],factor)
-numeric_cols <-c('Price.Target','Price.After.One.Year')
-finaldf[numeric_cols] <- lapply(finaldf[numeric_cols],as.numeric)
 
+#factor_cols <- -which(names(finaldf) %in% c('Price Target','Price After One Year'))
+#finaldf[factor_cols] <- lapply(finaldf[factor_cols],factor)
+#numeric_cols <-c('Price.Target','Price.After.One.Year')
+#finaldf[numeric_cols] <- lapply(finaldf[numeric_cols],as.numeric)
+
+finaldf[names(finaldf)] <- lapply(finaldf[names(finaldf)],factor)
 
 ```
 
@@ -74,7 +76,13 @@ glm.probs <-predict(model,testing,type = "response")
 #this creates a list with all 0 with same size as testing
 glm.predict <- rep( 0 ,nrow(testing))
 
-glm.predict[glm.probs > .5] <- 1 #cutoff set to 0.5
+
+#For our case having higher precission is more important as in our case Gettin False Positive rate is costly (When you predict True
+#but its actually false thus you loose money! or cant get your guranteed return from following analyst) and False Negative is not #important because what you predicted false and it is actually true.
+
+#Check the threshold graph to see relation between precission and recall in our case
+
+glm.predict[glm.probs > .65] <- 1 #cutoff set to 0.5
 confusionMatrix(glm.predict, testing$TargetAchieved, positive ="1", mode="prec_recall")
 ```
 
