@@ -77,8 +77,10 @@ glm.probs <-predict(model,testing,type = "response")
 glm.predict <- rep( 0 ,nrow(testing))
 
 
-#For our case having higher precission is more important as in our case Gettin False Positive rate is costly (When you predict True
-#but its actually false thus you loose money! or cant get your guranteed return from following analyst) and False Negative is not #important because what you predicted false and it is actually true.
+#In our case having higher precission is more important as getting False Positive rate is costly
+#(When you predict True but its actually false thus you loose money! or cant get your guranteed 
+#return by following analyst) and False Negative is not important because what you predicted false
+#and it is actually true. (ignored that rating and that rating was correct)
 
 #Check the threshold graph to see relation between precission and recall in our case
 

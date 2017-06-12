@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ---
-title: "Price Target Prediction"
+title: "Price Target Prediction Logistic Model"
 output: html_document
 ---
 

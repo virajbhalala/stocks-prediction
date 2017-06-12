@@ -2,3 +2,172 @@
 title: "Analyst Price Target Analysis using XGBoost model"
 output: html_document
 ---
+
+```{r setup, include=FALSE}
+library(rvest)
+library(xgboost)
+library(Matrix)
+library(caret)
+library(ROCR)
+```
+
+
+```{r Load and Drop}
+#Drop Cols that will not be used in model
+finaldf <- read.csv("AnalystRatingData/ratings.csv", check.names = TRUE)
+drops <- c("Date","Firm","Action","Rating","Ticker","", "Price.After.One.Year", "Price.Target")
+finaldf <- finaldf[ , !(names(finaldf) %in% drops)]
+
+```
+
+
+```{r initial}
+#convert everything to numeric as XGBoost only recognize numeric data
+finaldf[names(finaldf)] <- lapply(finaldf[names(finaldf)],as.numeric)
+
+```
+
+```{r zero_variance}
+nzv <- nearZeroVar(finaldf,saveMetrics = TRUE)
+sorted <-nzv[order(nzv$freqRatio),]
+print(sorted)
+
+#remove features that with high freq ratio (which appears less frequently.). freqRatio of 700 means it appears once in 700 times. This 
+#helped us to remove some of analyst/banks that are less known and 
+remove_features <- rownames(nzv[nzv$freqRatio > 700, ])
+#this reduced number of columns from 137 to 94
+finaldf <-finaldf[,!names(finaldf)%in% remove_features]
+
+```
+
+```{r split data}
+ 
+set.seed(417)
+#make.name will replace space with dot in column names
+names(finaldf)<-make.names(names(finaldf),unique=TRUE)
+finaldf<-x<-na.omit(finaldf)
+inTrain <- createDataPartition(y=finaldf$"TargetAchieved",p = 0.7, list=FALSE)
+training <- finaldf[inTrain,]
+testing <- finaldf[-inTrain,]
+output_vector_training <- training$TargetAchieved
+output_vector_testing <- testing$TargetAchieved
+
+#drop independent variable form training and testing set as xgboost will understand it as a feature
+training <- training[ , !names(training) %in% c("TargetAchieved")]
+testing <- testing[ , !names(testing) %in% c("TargetAchieved")]
+```
+
+```{r train test}
+dtrain <-xgb.DMatrix(as.matrix(training), label = output_vector_training)
+dtest <- xgb.DMatrix(as.matrix(testing), label = output_vector_testing)
+#just to check if we have either 0 or 1
+sumwpos <- sum(output_vector_training == 1)
+sumwneg <- sum(output_vector_training == 0)
+nrow(training) == sumwpos + sumwneg
+
+
+```
+
+
+```{r modelling with XGBoost}
+xgb_params_1 = list(
+  objective = "binary:logistic", # binary classification
+  eta = 0.1, # learning rate
+  max.depth = 4, # maxtree depth
+  eval_metric = "auc", # evaluation metric
+  scale_pos_weight = sumwneg / sumwpos
+)
+
+
+system.time(
+bst <- xgboost(data = dtrain,
+params = xgb_params_1,
+nrounds = 250,
+verbose = 1,
+print_every_n = 10,
+early_stopping_rounds = 50) # stop if no improvement within n trees)
+)
+```
+
+
+```{r 10}
+
+xgb.probs <- predict(bst, as.matrix(testing))
+length(xgb.probs) == nrow(testing) # verifiy that this is equivalent to nrow(testing)
+
+```
+
+
+```{r Cuttoff and confustion matrix}
+#this creates a list with all 0 with same size as testing
+glm.predict <- rep( 0 ,nrow(testing))
+
+
+#In our case having higher precission is more important as getting False Positive rate is costly
+#(When you predict True but its actually false thus you loose money! or cant get your guranteed 
+#return by following analyst) and False Negative is not important because what you predicted false
+#and it is actually true. (ignored that rating and that rating was correct)
+
+#Check the threshold graph to see relation between precission and recall in our case
+
+xgb.pred <- as.numeric(xgb.probs > 0.65)
+confusionMatrix(xgb.pred, output_vector_testing, positive="1", mode="prec_recall")
+```
+
+
+
+```{r ROC}
+pred<- prediction(xgb.probs, output_vector_testing)
+perf <- performance(pred,"tpr","fpr")
+plot(perf, colorize=TRUE)
+abline(a=0, b=1)
+```
+
+```{r AUC}
+performance(pred, measure = "auc")@y.values
+```
+
+```{r Selecting Threshold}
+dfLength <- length(seq(0.00,0.999,0.001))
+thresholdDF <- data.frame(percent = numeric(dfLength),threshold = numeric(dfLength),
+precision = numeric(dfLength), recall = numeric(dfLength), f1 = numeric(dfLength))
+dfListIndex <-0
+for (i in seq(0.00, 0.999, 0.001)){
+dfListIndex = dfListIndex +1
+#get minimum value from the sorted list which will be our cutoff value
+threshold = min(head(sort(glm.probs,decreasing=TRUE), n = (length(glm.probs)*(1-i))
+))
+thresholdDF$percent[dfListIndex] = (1-i)*100
+thresholdDF$threshold[dfListIndex] = threshold
+# set to 1 if probability is above threshold otehr wise 0
+glm.pred = rep(0, nrow(testing))
+glm.pred[xgb.probs >= threshold] = 1
+#create confustion matrix and get pos pred value from the confusion matrix
+cm = confusionMatrix(glm.pred, output_vector_testing, positive="1", mode="prec_recall")
+byClass = cm$byClass
+precision = byClass[5]
+recall = byClass[6]
+f1 = byClass[7]
+thresholdDF$precision[dfListIndex] = precision
+thresholdDF$recall[dfListIndex] = recall
+thresholdDF$f1[dfListIndex] = f1
+}
+
+# Plot
+ggplot(data=thresholdDF,aes(threshold, y=value,color =variable))+ geom_point(aes(y=precision , col = "Precision"))+ geom_point(aes(y=recall , col = "Recall"))+ geom_point (aes(y=f1 , col = "F1 (Harmonic Mean of Precision & Recall)"))
+
+```
+
+```{r ROOCR}
+perf <- performance(pred,"prec","rec")
+plot(perf, colorize=TRUE)
+```
+
+
+```{r Variable importance}
+importance <- xgb.importance(feature_names = colnames(dtrain), model = bst)
+head(importance, 25)
+xgb.plot.importance(importance_matrix = importance, top_n = 15)
+```
+
+
