@@ -42,7 +42,7 @@ finaldf <-finaldf[,!names(finaldf)%in% remove_features]
 
 ```{r split data}
  
-set.seed(417)
+set.seed(410)
 #make.name will replace space with dot in column names
 names(finaldf)<-make.names(names(finaldf),unique=TRUE)
 finaldf<-x<-na.omit(finaldf)
@@ -100,7 +100,7 @@ length(xgb.probs) == nrow(testing) # verifiy that this is equivalent to nrow(tes
 
 ```{r Cuttoff and confustion matrix}
 #this creates a list with all 0 with same size as testing
-glm.predict <- rep( 0 ,nrow(testing))
+xgb.predict <- rep( 0 ,nrow(testing))
 
 
 #In our case having higher precission is more important as getting False Positive rate is costly
@@ -124,6 +124,7 @@ abline(a=0, b=1)
 ```
 
 ```{r AUC}
+#AUC or C-Stats
 performance(pred, measure = "auc")@y.values
 ```
 
@@ -133,28 +134,28 @@ thresholdDF <- data.frame(percent = numeric(dfLength),threshold = numeric(dfLeng
 precision = numeric(dfLength), recall = numeric(dfLength), f1 = numeric(dfLength))
 dfListIndex <-0
 for (i in seq(0.00, 0.999, 0.001)){
-dfListIndex = dfListIndex +1
-#get minimum value from the sorted list which will be our cutoff value
-threshold = min(head(sort(glm.probs,decreasing=TRUE), n = (length(glm.probs)*(1-i))
-))
-thresholdDF$percent[dfListIndex] = (1-i)*100
-thresholdDF$threshold[dfListIndex] = threshold
-# set to 1 if probability is above threshold otehr wise 0
-glm.pred = rep(0, nrow(testing))
-glm.pred[xgb.probs >= threshold] = 1
-#create confustion matrix and get pos pred value from the confusion matrix
-cm = confusionMatrix(glm.pred, output_vector_testing, positive="1", mode="prec_recall")
-byClass = cm$byClass
-precision = byClass[5]
-recall = byClass[6]
-f1 = byClass[7]
-thresholdDF$precision[dfListIndex] = precision
-thresholdDF$recall[dfListIndex] = recall
-thresholdDF$f1[dfListIndex] = f1
+  dfListIndex = dfListIndex +1
+  #get minimum value from the sorted list which will be our cutoff value
+  threshold = min(head(sort(xgb.probs,decreasing=TRUE), n = (length(xgb.probs)*(1-i))
+  ))
+  thresholdDF$percent[dfListIndex] = (1-i)*100
+  thresholdDF$threshold[dfListIndex] = threshold
+  # set to 1 if probability is above threshold otehr wise 0
+  xgb.pred = rep(0, nrow(testing))
+  xgb.pred[xgb.probs >= threshold] = 1
+  #create confustion matrix and get pos pred value from the confusion matrix
+  cm = confusionMatrix(xgb.pred, output_vector_testing, positive="1", mode="prec_recall")
+  byClass = cm$byClass
+  precision = byClass[5]
+  recall = byClass[6]
+  f1 = byClass[7]
+  thresholdDF$precision[dfListIndex] = precision
+  thresholdDF$recall[dfListIndex] = recall
+  thresholdDF$f1[dfListIndex] = f1
 }
 
 # Plot
-ggplot(data=thresholdDF,aes(threshold, y=value,color =variable))+ geom_point(aes(y=precision , col = "Precision"))+ geom_point(aes(y=recall , col = "Recall"))+ geom_point (aes(y=f1 , col = "F1 (Harmonic Mean of Precision & Recall)"))
+ggplot(data=thresholdDF,aes(threshold, y=value,color =variable))+ geom_point(aes(y=precision , col = "Precision"))+ geom_point(aes(y=recall , col = "Recall"))
 
 ```
 

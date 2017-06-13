@@ -36,8 +36,6 @@ getStockAnalystPriceTarget <- function (ticker){
     #filter the df by removing rows that have blank price targets and ratings
     priceTargets <- subset(priceTargets, priceTargets$"Price Target" != "")
     #priceTargets <- subset(priceTargets, priceTargets$"Rating" != "")
-
-        
     #drop unnecessary columns in df
     drops <- c("Impact on Share Price","Details")
     priceTargets <- priceTargets[ , !(names(priceTargets) %in% drops)]
@@ -89,7 +87,7 @@ getStockAnalystPriceTarget <- function (ticker){
 
 
 
-```{r Get price targets for all stocks echo=FALSE warning=FALSE}
+```{r Get price targets for all stocks }
 Nasdaq100Tickers <- c("ATVI","ADBE","AKAM","ALXN","GOOG","GOOGL","AMZN","AAL","AMGN","ADI","AAPL","AMAT","ADSK","ADP","BIDU","BIIB","BMRN","AVGO","CA","CELG","CERN","CHTR","CHKP","CTAS","CSCO","CTXS","CTSH","CMCSA","COST","CSX","CTRP","XRAY","DISCA","DISCK","DISH","DLTR","EBAY","EA","EXPE","ESRX","FB","FAST","FISV","GILD","HAS","HSIC","HOLX","IDXX","ILMN","INCY","INTC","INTU","ISRG","JBHT","JD","KLAC","LRCX","LBTYA","LBTYK","LILA","LILAK","LVNTA","QVCA","MAR","MAT","MXIM","MCHP","MU","MSFT","MDLZ","MNST","MYL","NTES","NFLX","NCLH","NVDA","ORLY","PCAR","PAYX","PYPL","QCOM","REGN","ROST","STX","SHPG","SIRI","SWKS","SBUX","SYMC","TMUS","TSLA","TXN","KHC","PCLN","TSCO","FOX","FOXA","ULTA","VRSK","VRTX","VIAB","VOD","WBA","WDC","WYNN","XLNX","YHOO")
 
 finaldf<-NULL

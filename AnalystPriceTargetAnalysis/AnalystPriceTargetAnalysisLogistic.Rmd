@@ -84,7 +84,7 @@ glm.predict <- rep( 0 ,nrow(testing))
 
 #Check the threshold graph to see relation between precission and recall in our case
 
-glm.predict[glm.probs > .65] <- 1 #cutoff set to 0.5
+glm.predict[glm.probs > .65] <- 1 #cutoff set to 0.65
 confusionMatrix(glm.predict, testing$TargetAchieved, positive ="1", mode="prec_recall")
 ```
 
@@ -96,6 +96,7 @@ abline(a=0, b=1)
 ```
 
 ```{r AUC}
+#AUC or C-Stats
 performance(pred,measure = "auc")@y.values
 ```
 
@@ -105,28 +106,28 @@ thresholdDF <- data.frame(percent = numeric(dfLength),threshold = numeric(dfLeng
 precision = numeric(dfLength), recall = numeric(dfLength), f1 = numeric(dfLength))
 dfListIndex <-0
 for (i in seq(0.00, 0.999, 0.001)){
-dfListIndex = dfListIndex +1
-#get minimum value from the sorted list which will be our cutoff value
-threshold = min(head(sort(glm.probs,decreasing=TRUE), n = (length(glm.probs)*(1-i))
-))
-thresholdDF$percent[dfListIndex] = (1-i)*100
-thresholdDF$threshold[dfListIndex] = threshold
-# set to 1 if probability is above threshold otehr wise 0
-glm.pred = rep(0, nrow(testing))
-glm.pred[glm.probs >= threshold] = 1
-#create confustion matrix and get pos pred value from the confusion matrix
-cm = confusionMatrix(glm.pred, testing$TargetAchieved, positive="1", mode="prec_recall")
-byClass = cm$byClass
-precision = byClass[5]
-recall = byClass[6]
-f1 = byClass[7]
-thresholdDF$precision[dfListIndex] = precision
-thresholdDF$recall[dfListIndex] = recall
-thresholdDF$f1[dfListIndex] = f1
+  dfListIndex = dfListIndex +1
+  #get minimum value from the sorted list which will be our cutoff value
+  threshold = min(head(sort(glm.probs,decreasing=TRUE), n = (length(glm.probs)*(1-i))
+  ))
+  thresholdDF$percent[dfListIndex] = (1-i)*100
+  thresholdDF$threshold[dfListIndex] = threshold
+  # set to 1 if probability is above threshold otehr wise 0
+  glm.pred = rep(0, nrow(testing))
+  glm.pred[glm.probs >= threshold] = 1
+  #create confustion matrix and get pos pred value from the confusion matrix
+  cm = confusionMatrix(glm.pred, testing$TargetAchieved, positive="1", mode="prec_recall")
+  byClass = cm$byClass
+  precision = byClass[5]
+  recall = byClass[6]
+  f1 = byClass[7]
+  thresholdDF$precision[dfListIndex] = precision
+  thresholdDF$recall[dfListIndex] = recall
+  thresholdDF$f1[dfListIndex] = f1
 }
 
 # Plot
-ggplot(data=thresholdDF,aes(threshold, y=value,color =variable))+ geom_point(aes(y=precision , col = "Precision"))+ geom_point(aes(y=recall , col = "Recall"))+ geom_point (aes(y=f1 , col = "F1 (Harmonic Mean of Precision & Recall)"))
+ggplot(data=thresholdDF,aes(threshold, y=value,color =variable))+ geom_point(aes(y=precision , col = "Precision"))+ geom_point(aes(y=recall , col = "Recall"))
 
 ```
 
