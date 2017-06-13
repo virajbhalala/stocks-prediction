@@ -1,0 +1,185 @@
+---
+title: "Analyst Price Target Analysis using Random Forest model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(h2o)
+library(caret)
+library(ROCR)
+```
+
+
+```{r Load and Drop}
+#Drop Cols that will not be used in model
+finaldf <- read.csv("AnalystRatingData/ratings.csv", check.names = TRUE)
+drops <- c("Date","Firm","Action","Rating","Ticker","", "Price.After.One.Year", "Price.Target")
+finaldf <- finaldf[ , !(names(finaldf) %in% drops)]
+
+```
+
+
+```{r initial}
+finaldf[names(finaldf)] <- lapply(finaldf[names(finaldf)],factor)
+
+```
+
+```{r zero_variance}
+nzv <- nearZeroVar(finaldf,saveMetrics = TRUE)
+sorted <-nzv[order(nzv$freqRatio),]
+print(sorted)
+
+#remove features that with high freq ratio (which appears less frequently.). freqRatio of 700 means it appears once in 700 times. This 
+#helped us to remove some of analyst/banks that are less known and 
+remove_features <- rownames(nzv[nzv$freqRatio > 700, ])
+#this reduced number of columns from 137 to 94
+finaldf <-finaldf[,!names(finaldf)%in% remove_features]
+
+```
+
+```{r split data}
+ 
+set.seed(417)
+#make.name will replace space with dot in column names
+names(finaldf)<-make.names(names(finaldf),unique=TRUE)
+finaldf<-x<-na.omit(finaldf)
+inTrain <- createDataPartition(y=finaldf$"TargetAchieved",p = 0.7, list=FALSE)
+training <- finaldf[inTrain,]
+testing <- finaldf[-inTrain,]
+
+
+```
+
+```{r h2o init}
+h2o.init(
+    nthreads=-1,            ## -1: use all available threads
+    max_mem_size = "2G")    ## specify the memory size for the H2O cloud
+h2o.removeAll()             # Clean slate - just in case the cluster was already running
+
+
+```
+
+
+```{r import h2o}
+
+system.time({
+    training <- as.h2o(training, destination_frame="training")
+    testing <- as.h2o(testing, destination_frame="testing")
+    
+    ## assign the first result the R variable train and the H2O name train.hex
+    train <- h2o.assign(training, "train.hex")
+    test <- h2o.assign(testing, "test.hex")     ## R test, H2O test.hex
+})
+
+
+#delete headers
+train <- train[-1, ]
+test <- test[-1, ]
+
+
+```
+
+
+
+```{r rf}
+
+#system.time({
+## run our first predictive model
+## FOR EACH MODEL, NEED TO CHANGE PREDICTOR AND TARGET COLUMN!    
+rf1 <- h2o.randomForest(         ## h2o.randomForest function
+  training_frame = train,        ## the H2O frame for training
+  #validation_frame = valid,     ## the H2O frame for validation (not required)
+  # x=-3,                        ## the predictor columns, by column index - if x is missing, then all columns except y are used
+  y=1,                           ## the target index (what we are predicting)
+  model_id = "rf_covType_v1",    ## name the model in H2O
+                                 ##   not required, but helps use Flow
+  ntrees = 50,                  ## use a maximum of 200 trees to create the
+                                 ##  random forest model. The default is 50.
+                                 ##  I have increased it because I will let 
+                                 ##  the early stopping criteria decide when
+                                 ##  the random forest is sufficiently accurate
+  stopping_rounds = 2,           ## Stop fitting new trees when the 2-tree
+                                 ##  average is within 0.001 (default) of 
+                                 ##  the prior two 2-tree averages.
+                                 ##  Can be thought of as a convergence setting
+  score_each_iteration = T,      ## Predict against training and validation for
+                                 ##  each tree. Default will skip several.
+  seed = 1000000)                ## Set the random seed so that this can be
+                                 ##  reproduced.
+#})
+
+
+```
+
+```{r test}
+
+system.time(rf.probs <- as.data.frame(h2o.predict(rf1, test)$p1))
+
+nrow(rf.probs) == nrow(test) # verifiy that this is equivalent to nrow(testing)
+# set cutoff value (selection is detailed in the Analysis section)
+
+```
+
+
+```{r Cuttoff and confustion matrix}
+
+rf.pred <- as.numeric(rf.probs > 0.65)
+# set positive class as "1"
+# use precision/recall mode
+
+
+
+#In our case having higher precission is more important as getting False Positive rate is costly
+#(When you predict True but its actually false thus you loose money! or cant get your guranteed 
+#return by following analyst) and False Negative is not important because what you predicted false
+#and it is actually true. (ignored that rating and that rating was correct)
+
+#Check the threshold graph to see relation between precission and recall in our case
+
+
+output_vector_testing <- as.data.frame(test)$TargetAchieved
+confusionMatrix(rf.pred, output_vector_testing, positive="1", mode="prec_recall")
+
+
+
+
+
+```
+
+
+
+```{r ROC}
+
+pred<- prediction(rf.probs, output_vector_testing)
+perf <- performance(pred,"tpr","fpr")
+plot(perf, colorize=TRUE)
+abline(a=0, b=1)
+```
+
+```{r AUC}
+#AUC or C-Stats
+performance(pred, measure = "auc")@y.values
+```
+
+
+
+```{r ROOCR}
+perf <- performance(pred,"prec","rec")
+plot(perf, colorize=TRUE)
+```
+
+
+```{r Variable importance}
+
+
+importance <- h2o.varimp(rf1)
+head(importance, 25)
+h2o.varimp_plot(rf1, num_of_features =  15)
+```
+
+
+```{r h2o_shutdown}
+# All done, shutdown H2O
+h2o.shutdown(prompt=FALSE)
+```
